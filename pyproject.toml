@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "featree"
+version = "0.1.0"
+description = ""
+authors = ["williamfzc <178894043@qq.com>"]
+license = "Apache 2.0"
+readme = "README.md"
+packages = [
+    { include = "featree" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.32.2"
+numpy = "^1.26.4"
+networkx = "^3.3"
+pandas = "^2.2.2"
+python-louvain = "^0.16"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
