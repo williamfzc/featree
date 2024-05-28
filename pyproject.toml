@@ -16,6 +16,7 @@ numpy = "^1.26.4"
 networkx = "^3.3"
 pandas = "^2.2.2"
 python-louvain = "^0.16"
+treelib = "^1.7.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
