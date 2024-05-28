@@ -35,40 +35,25 @@ def gen_graph():
     return G
 
 
-def recursive_community_detection(G, threshold, community_id, tree):
+def recursive_community_detection(G, threshold, tree, parent):
     # Initial community detection on the whole graph or subgraph
     # file -> comm dict
     partition = community_louvain.best_partition(G)
-
-    # Create a dictionary to hold the final communities
-    final_communities = {}
 
     # Step 2: Check each community
     for comm in set(partition.values()):
         # Get the nodes in this community
         community_nodes = [nodes for nodes in partition.keys() if partition[nodes] == comm]
+        n = tree.create_node(parent=parent, data=community_nodes)
 
         if len(community_nodes) > threshold:
             # Step 3: Further split the large community
             subgraph = G.subgraph(community_nodes)
+            # dead loop
+            if subgraph.order() == G.order():
+                continue
 
-            cur = community_id[0]
-            tree.create_node(cur, parent=tree.root)
-
-            sub_communities = recursive_community_detection(subgraph, threshold, community_id, tree)
-
-            assert not set(sub_communities.keys()) & set(final_communities.keys())
-            # Merge sub-communities into final communities dict
-            final_communities.update(sub_communities)
-            # sub_communities belong to community_id
-            for each_comm in sub_communities:
-                tree.create_node(each_comm, parent=cur)
-        else:
-            # If community size is within threshold, add directly to final communities
-            final_communities[community_id[0]] = community_nodes
-            community_id[0] += 1
-
-    return final_communities
+            recursive_community_detection(subgraph, threshold, tree, n)
 
 
 if __name__ == "__main__":
@@ -81,9 +66,8 @@ if __name__ == "__main__":
     print(f"threshold: {threshold}")
 
     tree = Tree()
+    tree.create_node(identifier=0)
 
     # Generate the final communities
-    final_communities = recursive_community_detection(graph, threshold, [0], tree)
-
-    for k, v in final_communities.items():
-        print(f"{k}: {len(v)}")
+    recursive_community_detection(graph, threshold, tree, tree.root)
+    tree.save2file("output.txt")
