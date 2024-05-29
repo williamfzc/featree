@@ -2,7 +2,10 @@ from featree import gen_tree
 
 
 def main():
-    _ = gen_tree()
+    tree = gen_tree()
+    node_tree = tree.to_node_tree()
+    j = node_tree.model_dump_json()
+    print(j)
 
 
 if __name__ == "__main__":
