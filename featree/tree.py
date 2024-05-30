@@ -7,8 +7,16 @@ from community import community_louvain
 from pydantic import BaseModel
 from treelib import Tree, Node
 
-from featree.llm import LLM
+from featree.llm import LLM, get_llm, get_mock_llm
 from featree.relation import gen_graph
+
+
+def postorder_traversal(tree: Tree, node_id: str, visit: typing.Callable):
+    node = tree.get_node(node_id)
+    if node is not None:
+        for child in tree.children(node_id):
+            postorder_traversal(tree, child.identifier, visit)
+        visit(node)
 
 
 def recursive_community_detection(
@@ -49,7 +57,6 @@ class Featree(object):
     def __init__(self, data: treelib.Tree):
         self._data: treelib.Tree = data
         self._desc_dict = dict()
-        self._summary = ""
 
     def leaves(self):
         return [each for each in self._data.leaves() if len(each.data) > 1]
@@ -58,8 +65,30 @@ class Featree(object):
         for node in tqdm.tqdm(self.leaves()):
             self.infer_node(llm, node)
 
+    def infer_branches(self, llm: LLM):
+        def inner(node: Node):
+            if node.identifier in self._desc_dict:
+                return
+
+            # infer from children's desc
+            desc_list = []
+            nid = node.identifier
+            for each_child in self._data.children(nid):
+                each_child_nid = each_child.identifier
+                if each_child_nid in self._desc_dict:
+                    desc = self._desc_dict[each_child_nid]
+                    desc_list.append(desc)
+            summary = self._infer_summary(llm, "\n".join(desc_list))
+            self._desc_dict[nid] = summary
+
+        postorder_traversal(self._data, self.ROOT, inner)
+
     def infer_node(self, llm: LLM, node: Node):
         content = "\n".join(node.data)
+        desc = self._infer_summary(llm, content)
+        self._desc_dict[node.identifier] = desc
+
+    def _infer_summary(self, llm: LLM, prompt: str) -> str:
         prompt = f"""
 <task>
 Please help summarize the potential functions contained in the following content. 
@@ -67,29 +96,15 @@ Return a brief sentence that encapsulates the functions of all the files combine
 </task>
 
 <content>
-{content}
+{prompt}
 </content>
 
 <requirement>
 NO ANY PREFIXES!
 </requirement>
-        """
+            """
         desc = llm.ask(prompt)
-        self._desc_dict[node.identifier] = desc
-
-    def infer_summary(self, llm: LLM):
-        content = "\n".join(self._desc_dict.values())
-        prompt = f"""
-<task>
-Please help me summarize the functionalities provided by the code repository.
-I will provide summaries of some modules. Please summarize these summaries and provide a concise overall summary.
-</task>
-
-<content>
-{content}
-</content>
-"""
-        self._summary = llm.ask(prompt)
+        return desc
 
     def to_node_tree(self, node_id: str = None) -> FeatreeNode:
         if not node_id:
@@ -99,9 +114,6 @@ I will provide summaries of some modules. Please summarize these summaries and p
             desc=self._desc_dict.get(node_id, ""),
             files=self._data.get_node(node_id).data or [],
         )
-
-        if node_id == self._data.root:
-            node.desc = self._summary
 
         for child_node in self._data.children(node_id):
             child_node = self.to_node_tree(child_node.identifier)
@@ -132,8 +144,11 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
     ret = Featree(tree)
 
     if config.infer:
-        llm = LLM()
-        ret.infer_leaves(llm)
-        ret.infer_summary(llm)
+        llm = get_llm()
+    else:
+        llm = get_mock_llm()
+
+    ret.infer_leaves(llm)
+    ret.infer_branches(llm)
 
     return ret
