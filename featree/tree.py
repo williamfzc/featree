@@ -4,7 +4,6 @@ import networkx as nx
 import tqdm
 import treelib
 from community import community_louvain
-from loguru import logger
 from pydantic import BaseModel
 from treelib import Tree, Node
 
@@ -13,7 +12,7 @@ from featree.relation import gen_graph
 
 
 def recursive_community_detection(
-    g: nx.Graph, threshold: int, tree: treelib.Tree, parent: treelib.Node
+    g: nx.Graph, leaves_limit: int, tree: treelib.Tree, parent: treelib.Node
 ):
     # Initial community detection on the whole graph or subgraph
     # file -> comm dict
@@ -27,14 +26,14 @@ def recursive_community_detection(
         ]
         n = tree.create_node(parent=parent, data=community_nodes)
 
-        if len(community_nodes) > threshold:
+        if len(community_nodes) > leaves_limit:
             # Step 3: Further split the large community
             subgraph = g.subgraph(community_nodes)
             # dead loop
             if subgraph.order() == g.order():
                 continue
 
-            recursive_community_detection(subgraph, threshold, tree, n)
+            recursive_community_detection(subgraph, leaves_limit, tree, n)
 
 
 class FeatreeNode(BaseModel):
@@ -60,6 +59,7 @@ class Featree(object):
             self.infer_node(llm, node)
 
     def infer_node(self, llm: LLM, node: Node):
+        content = "\n".join(node.data)
         prompt = f"""
 <task>
 Please help summarize the potential functions contained in the following content. 
@@ -67,7 +67,7 @@ Return a brief sentence that encapsulates the functions of all the files combine
 </task>
 
 <content>
-{"\n".join(node.data)}
+{content}
 </content>
 
 <requirement>
@@ -78,6 +78,7 @@ NO ANY PREFIXES!
         self._desc_dict[node.identifier] = desc
 
     def infer_summary(self, llm: LLM):
+        content = "\n".join(self._desc_dict.values())
         prompt = f"""
 <task>
 Please help me summarize the functionalities provided by the code repository.
@@ -85,7 +86,7 @@ I will provide summaries of some modules. Please summarize these summaries and p
 </task>
 
 <content>
-{"\n".join(self._desc_dict.values())}
+{content}
 </content>
 """
         self._summary = llm.ask(prompt)
@@ -109,6 +110,8 @@ I will provide summaries of some modules. Please summarize these summaries and p
 
 
 class GenTreeConfig(BaseModel):
+    leaves_limit: int = 10
+    leaves_limit_radio: float = 0.1
     infer: bool = False
 
 
@@ -119,18 +122,14 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
     graph = gen_graph()
 
     # Set the threshold for community size
-    threshold = int(0.1 * len(graph.nodes))
-    if threshold < 20:
-        threshold = 20
-    logger.info(f"threshold: {threshold}")
+    leaves_limit = int(config.leaves_limit_radio * len(graph.nodes))
+    if leaves_limit < config.leaves_limit:
+        leaves_limit = config.leaves_limit
 
     tree = Tree()
     tree.create_node(identifier=Featree.ROOT)
-
-    # Generate the final communities
-    recursive_community_detection(graph, threshold, tree, tree.root)
+    recursive_community_detection(graph, leaves_limit, tree, tree.root)
     ret = Featree(tree)
-    logger.info(f"leaves: {len(ret.leaves())}")
 
     if config.infer:
         llm = LLM()
