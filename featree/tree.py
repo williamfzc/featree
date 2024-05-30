@@ -103,20 +103,26 @@ I will provide summaries of some modules. Please summarize these summaries and p
             node.desc = self._summary
 
         for child_node in self._data.children(node_id):
-            if child_node.identifier not in self._desc_dict:
-                continue
             child_node = self.to_node_tree(child_node.identifier)
             node.children.append(child_node)
         return node
 
 
-def gen_tree() -> Featree:
+class GenTreeConfig(BaseModel):
+    infer: bool = False
+
+
+def gen_tree(config: GenTreeConfig = None) -> Featree:
+    if not config:
+        config = GenTreeConfig()
+
     graph = gen_graph()
 
     # Set the threshold for community size
     threshold = int(0.1 * len(graph.nodes))
     if threshold < 20:
         threshold = 20
+    logger.info(f"threshold: {threshold}")
 
     tree = Tree()
     tree.create_node(identifier=Featree.ROOT)
@@ -126,7 +132,9 @@ def gen_tree() -> Featree:
     ret = Featree(tree)
     logger.info(f"leaves: {len(ret.leaves())}")
 
-    llm = LLM()
-    ret.infer_leaves(llm)
-    ret.infer_summary(llm)
+    if config.infer:
+        llm = LLM()
+        ret.infer_leaves(llm)
+        ret.infer_summary(llm)
+
     return ret
