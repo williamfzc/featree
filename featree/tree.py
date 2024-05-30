@@ -4,12 +4,11 @@ import networkx as nx
 import tqdm
 import treelib
 from community import community_louvain
-from langchain_core.language_models import BaseLLM
+from loguru import logger
 from pydantic import BaseModel
 from treelib import Tree, Node
-from langchain_community.llms import Ollama
-from loguru import logger
 
+from featree.llm import LLM
 from featree.relation import gen_graph
 
 
@@ -56,15 +55,15 @@ class Featree(object):
     def leaves(self):
         return [each for each in self._data.leaves() if len(each.data) > 1]
 
-    def infer_leaves(self, llm: BaseLLM):
+    def infer_leaves(self, llm: LLM):
         for node in tqdm.tqdm(self.leaves()):
             self.infer_node(llm, node)
 
-    def infer_node(self, llm: BaseLLM, node: Node):
+    def infer_node(self, llm: LLM, node: Node):
         prompt = f"""
 <task>
-Please help summarize the potential business functions contained in the following content. 
-Return a keyword list that encapsulates the business functions of all the files combined. 
+Please help summarize the potential functions contained in the following content. 
+Return a brief sentence that encapsulates the functions of all the files combined. 
 </task>
 
 <content>
@@ -72,13 +71,13 @@ Return a keyword list that encapsulates the business functions of all the files 
 </content>
 
 <requirement>
-Your answer should only contain a valid json-format string array, which should be directly consumed by other programs.
+NO ANY PREFIXES!
 </requirement>
         """
-        desc = llm.invoke(prompt)
+        desc = llm.ask(prompt)
         self._desc_dict[node.identifier] = desc
 
-    def infer_summary(self, llm: BaseLLM):
+    def infer_summary(self, llm: LLM):
         prompt = f"""
 <task>
 Please help me summarize the functionalities provided by the code repository.
@@ -89,7 +88,7 @@ I will provide summaries of some modules. Please summarize these summaries and p
 {"\n".join(self._desc_dict.values())}
 </content>
 """
-        self._summary = llm.invoke(prompt)
+        self._summary = llm.ask(prompt)
 
     def to_node_tree(self, node_id: str = None) -> FeatreeNode:
         if not node_id:
@@ -127,8 +126,7 @@ def gen_tree() -> Featree:
     ret = Featree(tree)
     logger.info(f"leaves: {len(ret.leaves())}")
 
-    # todo: really bad behaviors
-    llm = Ollama(model="llama3", temperature=0.1)
+    llm = LLM()
     ret.infer_leaves(llm)
     ret.infer_summary(llm)
     return ret
