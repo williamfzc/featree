@@ -92,34 +92,32 @@ class Featree(object):
 
     def infer_node(self, llm: BaseLLM, node: Node):
         prompt = f"""
-You are a master software developer.
-
-Please help summarize the potential business functions contained in the following list of files. 
-Return a single sentence that encapsulates the business functions of all the files combined. 
-Do not include any file paths, only provide the combined one-sentence summary.
-Do not include any prefixes and wrappers.
+<task>
+Please help summarize the potential business functions contained in the following content. 
+Return a keyword list that encapsulates the business functions of all the files combined. 
+</task>
 
 <content>
 {"\n".join(node.data)}
 </content>
 
-Here is your Summary:
+<requirement>
+Your answer should only contain a valid json-format string array, which should be directly consumed by other programs.
+</requirement>
         """
         desc = llm.invoke(prompt)
         self._desc_dict[node.identifier] = desc
 
     def infer_summary(self, llm: BaseLLM):
         prompt = f"""
-You are a master software developer.
-
+<task>
 Please help me summarize the functionalities provided by the code repository.
 I will provide summaries of some modules. Please summarize these summaries and provide a concise overall summary.
+</task>
 
 <content>
 {"\n".join(self._desc_dict.values())}
 </content>
-
-Here is your Summary:
 """
         self._summary = llm.invoke(prompt)
 
@@ -159,7 +157,8 @@ def gen_tree() -> Featree:
     ret = Featree(tree)
     logger.info(f"leaves: {len(ret.leaves())}")
 
-    llm = Ollama(model="llama3")
+    # todo: really bad behaviors
+    llm = Ollama(model="llama3", temperature=0.1)
     ret.infer_leaves(llm)
     ret.infer_summary(llm)
     return ret
