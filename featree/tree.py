@@ -20,7 +20,11 @@ def postorder_traversal(tree: Tree, node_id: str, visit: typing.Callable):
 
 
 def recursive_community_detection(
-    g: nx.Graph, leaves_limit: int, tree: treelib.Tree, parent: treelib.Node
+    g: nx.Graph,
+    leaves_limit: int,
+    density_ratio: float,
+    tree: treelib.Tree,
+    parent: treelib.Node,
 ):
     # Initial community detection on the whole graph or subgraph
     # file -> comm dict
@@ -41,7 +45,11 @@ def recursive_community_detection(
             if subgraph.order() == g.order():
                 continue
 
-            recursive_community_detection(subgraph, leaves_limit, tree, n)
+            density = nx.density(subgraph)
+            if density < density_ratio:
+                recursive_community_detection(
+                    subgraph, leaves_limit, density_ratio, tree, n
+                )
 
 
 class FeatreeNode(BaseModel):
@@ -123,7 +131,8 @@ NO ANY PREFIXES!
 
 class GenTreeConfig(BaseModel):
     leaves_limit: int = 10
-    leaves_limit_radio: float = 0.1
+    leaves_limit_ratio: float = 0.1
+    density_ratio: float = 0.2
     infer: bool = False
 
 
@@ -134,13 +143,15 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
     graph = gen_graph()
 
     # Set the threshold for community size
-    leaves_limit = int(config.leaves_limit_radio * len(graph.nodes))
+    leaves_limit = int(config.leaves_limit_ratio * len(graph.nodes))
     if leaves_limit < config.leaves_limit:
         leaves_limit = config.leaves_limit
 
     tree = Tree()
     tree.create_node(identifier=Featree.ROOT)
-    recursive_community_detection(graph, leaves_limit, tree, tree.root)
+    recursive_community_detection(
+        graph, leaves_limit, config.density_ratio, tree, tree.root
+    )
     ret = Featree(tree)
 
     if config.infer:
