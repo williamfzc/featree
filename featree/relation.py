@@ -1,5 +1,6 @@
 import networkx as nx
 import requests
+import tqdm
 
 URL_BASE = "http://127.0.0.1:9411"
 URL_FILE_LIST = f"{URL_BASE}/file/list"
@@ -22,7 +23,7 @@ def gen_graph() -> nx.Graph:
 
     # First pass: find min and max scores
     relations_dict = {}
-    for each_file in files:
+    for each_file in tqdm.tqdm(files):
         relations = requests.get(URL_FILE_RELATION, params={"path": each_file}).json()
         relations_dict[each_file] = relations
         for each_relation in relations:

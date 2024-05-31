@@ -38,18 +38,21 @@ def recursive_community_detection(
         ]
         n = tree.create_node(parent=parent, data=community_nodes)
 
-        if len(community_nodes) > leaves_limit:
-            # Step 3: Further split the large community
-            subgraph = g.subgraph(community_nodes)
-            # dead loop
-            if subgraph.order() == g.order():
-                continue
+        # too small, stop
+        if len(community_nodes) < leaves_limit:
+            continue
 
-            density = nx.density(subgraph)
-            if density < density_ratio:
-                recursive_community_detection(
-                    subgraph, leaves_limit, density_ratio, tree, n
-                )
+        # Step 3: Further split the large community
+        subgraph = g.subgraph(community_nodes)
+        # dead loop
+        if subgraph.order() == g.order():
+            continue
+
+        density = nx.density(subgraph)
+        if density < density_ratio:
+            recursive_community_detection(
+                subgraph, leaves_limit, density_ratio, tree, n
+            )
 
 
 class FeatreeNode(BaseModel):
@@ -131,8 +134,8 @@ NO ANY PREFIXES!
 
 class GenTreeConfig(BaseModel):
     leaves_limit: int = 10
-    leaves_limit_ratio: float = 0.1
-    density_ratio: float = 0.2
+    leaves_limit_ratio: float = 0.05
+    density_ratio: float = 0.9
     infer: bool = False
 
 
