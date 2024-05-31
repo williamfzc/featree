@@ -1,4 +1,5 @@
 import typing
+from collections import deque
 
 import networkx as nx
 import tqdm
@@ -19,6 +20,25 @@ def postorder_traversal(tree: Tree, node_id: str, visit: typing.Callable):
         visit(node)
 
 
+def bfs_traversal(tree: Tree, start_node_id: str, visit: typing.Callable):
+    queue = deque([start_node_id])
+
+    while queue:
+        node_id = queue.popleft()
+        node = tree.get_node(node_id)
+        visit(node)
+        for child in tree.children(node_id):
+            queue.append(child.identifier)
+
+
+def dfs_traversal(tree: Tree, node_id: str, visit: typing.Callable):
+    node = tree.get_node(node_id)
+    if node is not None:
+        visit(node)
+        for child in tree.children(node_id):
+            dfs_traversal(tree, child.identifier, visit)
+
+
 def recursive_community_detection(
     g: nx.Graph,
     leaves_limit: int,
@@ -33,9 +53,9 @@ def recursive_community_detection(
     # Step 2: Check each community
     for comm in set(partition.values()):
         # Get the nodes in this community
-        community_nodes = [
-            nodes for nodes in partition.keys() if partition[nodes] == comm
-        ]
+        community_nodes = set(
+            (nodes for nodes in partition.keys() if partition[nodes] == comm)
+        )
         n = tree.create_node(parent=parent, data=community_nodes)
 
         # too small, stop
@@ -62,7 +82,7 @@ class FeatreeNode(BaseModel):
     children: typing.List["FeatreeNode"] = []
 
 
-class Featree(object):
+class _TreeBase(object):
     ROOT = "0"
 
     def __init__(self, data: treelib.Tree):
@@ -72,6 +92,23 @@ class Featree(object):
     def leaves(self):
         return [each for each in self._data.leaves() if len(each.data) > 1]
 
+    def walk_postorder(self, visit_cb: typing.Callable, node_id: str = None):
+        if not node_id:
+            node_id = self._data.root
+        postorder_traversal(self._data, node_id, visit_cb)
+
+    def walk_dfs(self, visit_cb: typing.Callable, node_id: str = None):
+        if not node_id:
+            node_id = self._data.root
+        dfs_traversal(self._data, node_id, visit_cb)
+
+    def walk_bfs(self, visit_cb: typing.Callable, node_id: str = None):
+        if not node_id:
+            node_id = self._data.root
+        bfs_traversal(self._data, node_id, visit_cb)
+
+
+class Featree(_TreeBase):
     def infer_leaves(self, llm: LLM):
         for node in tqdm.tqdm(self.leaves()):
             self.infer_node(llm, node)
