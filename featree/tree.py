@@ -1,5 +1,5 @@
 import typing
-from collections import deque
+from collections import deque, OrderedDict
 
 import networkx as nx
 import tqdm
@@ -47,15 +47,21 @@ def recursive_community_detection(
     parent: treelib.Node,
 ):
     # Initial community detection on the whole graph or subgraph
-    # file -> comm dict
-    partition = community_louvain.best_partition(g)
+    part_dict = {
+        each_node: index for index, each_node in enumerate(sorted(g.nodes()))
+    }
+    partition = community_louvain.best_partition(g, partition=part_dict, random_state=42)
 
     # Step 2: Check each community
-    for comm in set(partition.values()):
-        # Get the nodes in this community
-        community_nodes = set(
-            (nodes for nodes in partition.keys() if partition[nodes] == comm)
-        )
+    keys = sorted(partition.keys())
+    counter = OrderedDict()
+    for k in keys:
+        comm = partition[k]
+        if comm not in counter:
+            counter[comm] = []
+        counter[comm].append(k)
+
+    for comm, community_nodes in counter.items():
         n = tree.create_node(parent=parent, data=community_nodes)
 
         # too small, stop
@@ -171,7 +177,7 @@ NO ANY PREFIXES!
 
 class GenTreeConfig(BaseModel):
     leaves_limit: int = 10
-    leaves_limit_ratio: float = 0.05
+    leaves_limit_ratio: float = 0.01
     density_ratio: float = 0.9
     infer: bool = False
 
@@ -188,7 +194,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
         leaves_limit = config.leaves_limit
 
     tree = Tree()
-    tree.create_node(identifier=Featree.ROOT)
+    tree.create_node(identifier=Featree.ROOT, data=set())
     recursive_community_detection(
         graph, leaves_limit, config.density_ratio, tree, tree.root
     )
