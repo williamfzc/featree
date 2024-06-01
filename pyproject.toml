@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "featree"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["williamfzc <178894043@qq.com>"]
 license = "Apache 2.0"
@@ -10,10 +10,10 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.9"
 requests = "^2.32.2"
 numpy = "^1.26.4"
-networkx = "^3.3"
+networkx = "^3.2.1"
 pandas = "^2.2.2"
 python-louvain = "^0.16"
 treelib = "^1.7.0"
