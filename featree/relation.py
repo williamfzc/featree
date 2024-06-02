@@ -18,8 +18,8 @@ def gen_graph() -> nx.Graph:
         g.add_node(file)
 
     # Prepare to track min and max scores for normalization
-    min_score = float('inf')
-    max_score = float('-inf')
+    min_score = float("inf")
+    max_score = float("-inf")
 
     # First pass: find min and max scores
     relations_dict = {}
@@ -36,7 +36,14 @@ def gen_graph() -> nx.Graph:
     # Second pass: add edges with normalized weights
     for each_file, relations in relations_dict.items():
         for each_relation in relations:
-            normalized_score = (each_relation["score"] - min_score) / (max_score - min_score)
+            if max_score == min_score:
+                # 如果 max_score 等于 min_score，将所有 normalized_score 设为 0
+                normalized_score = 0
+            else:
+                normalized_score = (each_relation["score"] - min_score) / (
+                    max_score - min_score
+                )
+
             if normalized_score > 0:  # Only add edges with positive weights
                 g.add_edge(each_file, each_relation["name"], weight=normalized_score)
 
