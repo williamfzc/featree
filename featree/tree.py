@@ -8,6 +8,7 @@ from community import community_louvain
 from pydantic import BaseModel
 from treelib import Tree, Node
 
+from featree.config import GenTreeConfig
 from featree.llm import LLM, get_llm, get_mock_llm
 from featree.relation import gen_graph
 
@@ -47,10 +48,10 @@ def recursive_community_detection(
     parent: treelib.Node,
 ):
     # Initial community detection on the whole graph or subgraph
-    part_dict = {
-        each_node: index for index, each_node in enumerate(sorted(g.nodes()))
-    }
-    partition = community_louvain.best_partition(g, partition=part_dict, random_state=42)
+    part_dict = {each_node: index for index, each_node in enumerate(sorted(g.nodes()))}
+    partition = community_louvain.best_partition(
+        g, partition=part_dict, random_state=42
+    )
 
     # Step 2: Check each community
     keys = sorted(partition.keys())
@@ -175,18 +176,11 @@ NO ANY PREFIXES!
         return node
 
 
-class GenTreeConfig(BaseModel):
-    leaves_limit: int = 10
-    leaves_limit_ratio: float = 0.01
-    density_ratio: float = 0.9
-    infer: bool = False
-
-
 def gen_tree(config: GenTreeConfig = None) -> Featree:
     if not config:
         config = GenTreeConfig()
 
-    graph = gen_graph()
+    graph = gen_graph(config)
 
     # Set the threshold for community size
     leaves_limit = int(config.leaves_limit_ratio * len(graph.nodes))
