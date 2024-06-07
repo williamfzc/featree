@@ -99,6 +99,9 @@ class _TreeBase(object):
     def leaves(self):
         return [each for each in self._data.leaves() if len(each.data) > 1]
 
+    def desc(self, node: Node) -> str:
+        return self._desc_dict[node.identifier]
+
     def walk_postorder(self, visit_cb: typing.Callable, node_id: str = None):
         if not node_id:
             node_id = self._data.root
