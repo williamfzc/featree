@@ -40,6 +40,17 @@ def dfs_traversal(tree: Tree, node_id: str, visit: typing.Callable):
             dfs_traversal(tree, child.identifier, visit)
 
 
+def weighted_graph_density(G):
+    total_weight = sum(weight for u, v, weight in G.edges.data("weight", default=1))
+    max_possible_weight = (
+        max(weight for u, v, weight in G.edges.data("weight", default=1))
+        * (len(G) - 1)
+        * len(G)
+        / 2
+    )
+    return total_weight / max_possible_weight
+
+
 def recursive_community_detection(
     g: nx.Graph,
     leaves_limit: int,
@@ -65,18 +76,18 @@ def recursive_community_detection(
     for comm, community_nodes in counter.items():
         n = tree.create_node(parent=parent, data=community_nodes)
 
-        # too small, stop
-        if len(community_nodes) < leaves_limit:
-            continue
-
         # Step 3: Further split the large community
         subgraph = g.subgraph(community_nodes)
         # dead loop
         if subgraph.order() == g.order():
             continue
 
-        density = nx.density(subgraph)
+        density = weighted_graph_density(subgraph)
         if density < density_ratio:
+            # too small, stop
+            if len(community_nodes) < leaves_limit:
+                continue
+
             recursive_community_detection(
                 subgraph, leaves_limit, density_ratio, tree, n
             )

@@ -8,3 +8,4 @@ class GenTreeConfig(BaseModel):
     leaves_limit_ratio: float = 0.01
     density_ratio: float = 0.9
     infer: bool = False
+    exclude_regex: str = ""
