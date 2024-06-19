@@ -195,6 +195,9 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
         config = GenTreeConfig()
 
     graph = gen_graph(config)
+    sub_graphs = [
+        graph.subgraph(component).copy() for component in nx.connected_components(graph)
+    ]
 
     # Set the threshold for community size
     leaves_limit = int(config.leaves_limit_ratio * len(graph.nodes))
@@ -203,9 +206,12 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
 
     tree = Tree()
     tree.create_node(identifier=Featree.ROOT, data=set())
-    recursive_community_detection(
-        graph, leaves_limit, config.density_ratio, tree, tree.root
-    )
+
+    for each_sub_graph in sub_graphs:
+        recursive_community_detection(
+            each_sub_graph, leaves_limit, config.density_ratio, tree, tree.root
+        )
+
     ret = Featree(tree)
 
     if config.infer:
