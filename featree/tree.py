@@ -74,23 +74,26 @@ def recursive_community_detection(
         counter[comm].append(k)
 
     for comm, community_nodes in counter.items():
-        n = tree.create_node(parent=parent, data=community_nodes)
-
         # Step 3: Further split the large community
-        subgraph = g.subgraph(community_nodes)
+        cur_community_graph = g.subgraph(community_nodes)
         # dead loop
-        if subgraph.order() == g.order():
+        if cur_community_graph.order() == g.order():
             continue
 
-        density = weighted_graph_density(subgraph)
-        if density < density_ratio:
+        # try splitting this graph
+        for community_components in nx.connected_components(cur_community_graph):
+            component_graph = cur_community_graph.subgraph(community_components).copy()
+            n = tree.create_node(parent=parent, data=community_components)
+
             # too small, stop
-            if len(community_nodes) < leaves_limit:
+            if len(component_graph) < leaves_limit:
                 continue
 
-            recursive_community_detection(
-                subgraph, leaves_limit, density_ratio, tree, n
-            )
+            density = weighted_graph_density(component_graph)
+            if density < density_ratio:
+                recursive_community_detection(
+                    component_graph, leaves_limit, density_ratio, tree, n
+                )
 
 
 class FeatreeNode(BaseModel):
