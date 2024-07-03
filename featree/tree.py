@@ -109,8 +109,9 @@ class _TreeBase(object):
     def __init__(self, data: treelib.Tree):
         self._data: treelib.Tree = data
         self._desc_dict = dict()
+        self._leave_graph = nx.Graph()
 
-    def leaves(self):
+    def leaves(self) -> typing.List[Node]:
         return [each for each in self._data.leaves() if len(each.data) > 1]
 
     def desc(self, node: Node) -> str:
@@ -130,6 +131,41 @@ class _TreeBase(object):
         if not node_id:
             node_id = self._data.root
         bfs_traversal(self._data, node_id, visit_cb)
+
+    def build_graph(self):
+        # 1. add nodes to graph
+        g = nx.Graph()
+        self._leave_graph = g
+        leaves = set([each.identifier for each in self.leaves()])
+        g.add_nodes_from(leaves)
+
+        # 2. link these nodes by branches
+        def _walk(n: Node):
+            if n.identifier in leaves:
+                return
+
+            def _link(nn: Node):
+                if nn.identifier in leaves:
+                    return
+                children = self._data.children(nn.identifier)
+                for child1 in children:
+                    for child2 in children:
+                        ci1, ci2 = child1.identifier, child2.identifier
+                        if not ((ci1 in leaves) and (ci2 in leaves)):
+                            continue
+                        if ci1 == ci2:
+                            continue
+
+                        if not g.has_edge(ci1, ci2):
+                            g.add_edge(ci1, ci2)
+
+            self.walk_bfs(_link, n.identifier)
+
+        self.walk_postorder(_walk, self.ROOT)
+
+    def neighbors(self, node: Node) -> typing.List[Node]:
+        neighbors = self._leave_graph.neighbors(node.identifier)
+        return [self._data.get_node(each) for each in neighbors]
 
 
 class Featree(_TreeBase):
@@ -224,5 +260,8 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
 
     ret.infer_leaves(llm)
     ret.infer_branches(llm)
+
+    # build graph onto these nodes
+    ret.build_graph()
 
     return ret
