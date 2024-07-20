@@ -5,6 +5,7 @@ import networkx as nx
 import tqdm
 import treelib
 from community import community_louvain
+from loguru import logger
 from pydantic import BaseModel
 from treelib import Tree, Node
 
@@ -106,10 +107,11 @@ class FeatreeNode(BaseModel):
 class _TreeBase(object):
     ROOT = "0"
 
-    def __init__(self, data: treelib.Tree):
+    def __init__(self, data: treelib.Tree, graph: nx.Graph):
         self._data: treelib.Tree = data
         self._desc_dict = dict()
         self._leave_graph = nx.Graph()
+        self._origin_graph = graph
 
     def leaves(self) -> typing.List[Node]:
         return [each for each in self._data.leaves() if len(each.data) > 1]
@@ -163,9 +165,24 @@ class _TreeBase(object):
 
         self.walk_postorder(_walk, self.ROOT)
 
-    def neighbors(self, node: Node) -> typing.List[Node]:
+    def neighbors(self, node: Node, dis_limit: float = None) -> typing.List[Node]:
         neighbors = self._leave_graph.neighbors(node.identifier)
-        return [self._data.get_node(each) for each in neighbors]
+        # check these neighbors
+        nodes = [self._data.get_node(each) for each in neighbors]
+        ret = []
+
+        start_graph = self._origin_graph.subgraph(node.data)
+        for each_node in nodes:
+            if not dis_limit:
+                ret.append(each_node)
+                continue
+
+            end_graph = self._origin_graph.subgraph(each_node.data)
+            dis = nx.graph_edit_distance(start_graph, end_graph)
+            if dis < dis_limit:
+                ret.append(each_node)
+
+        return ret
 
 
 class Featree(_TreeBase):
@@ -251,7 +268,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
             each_sub_graph, leaves_limit, config.density_ratio, tree, tree.root
         )
 
-    ret = Featree(tree)
+    ret = Featree(tree, graph)
 
     if config.infer:
         llm = get_llm()
