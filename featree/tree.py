@@ -52,6 +52,10 @@ def weighted_graph_density(G):
     return total_weight / max_possible_weight
 
 
+class Cluster(BaseModel):
+    files: typing.List[str] = []
+
+
 def recursive_community_detection(
     g: nx.Graph,
     leaves_limit: int,
@@ -84,7 +88,12 @@ def recursive_community_detection(
         # try splitting this graph
         for community_components in nx.connected_components(cur_community_graph):
             component_graph = cur_community_graph.subgraph(community_components).copy()
-            n = tree.create_node(parent=parent, data=community_components)
+            # todo: inVs and outVs
+            node_data = Cluster(files=community_components)
+            n = tree.create_node(
+                parent=parent,
+                data=node_data,
+            )
 
             # too small, stop
             if len(component_graph) < leaves_limit:
@@ -100,8 +109,12 @@ def recursive_community_detection(
 class FeatreeNode(BaseModel):
     nid: str
     desc: str = ""
-    files: typing.List[str] = []
+    cluster: Cluster = None
     children: typing.List["FeatreeNode"] = []
+
+    @property
+    def files(self):
+        return self.cluster.files
 
 
 class _TreeBase(object):
@@ -114,7 +127,11 @@ class _TreeBase(object):
         self._origin_graph = graph
 
     def leaves(self) -> typing.List[Node]:
-        return [each for each in self._data.leaves() if len(each.data) > 1]
+        return [
+            each
+            for each in self._data.leaves()
+            if each.data and len(each.data.files) > 1
+        ]
 
     def desc(self, node: Node) -> str:
         return self._desc_dict[node.identifier]
@@ -171,13 +188,13 @@ class _TreeBase(object):
         nodes = [self._data.get_node(each) for each in neighbors]
         ret = []
 
-        start_graph = self._origin_graph.subgraph(node.data)
+        start_graph = self._origin_graph.subgraph(node.data.files)
         for each_node in nodes:
             if not dis_limit:
                 ret.append(each_node)
                 continue
 
-            end_graph = self._origin_graph.subgraph(each_node.data)
+            end_graph = self._origin_graph.subgraph(each_node.data.files)
             dis = nx.graph_edit_distance(start_graph, end_graph)
             if dis < dis_limit:
                 ret.append(each_node)
@@ -209,7 +226,7 @@ class Featree(_TreeBase):
         postorder_traversal(self._data, self.ROOT, inner)
 
     def infer_node(self, llm: LLM, node: Node):
-        content = "\n".join(node.data)
+        content = "\n".join(node.data.files)
         desc = self._infer_summary(llm, content)
         self._desc_dict[node.identifier] = desc
 
@@ -237,7 +254,7 @@ NO ANY PREFIXES!
         node = FeatreeNode(
             nid=node_id,
             desc=self._desc_dict.get(node_id, ""),
-            files=self._data.get_node(node_id).data or [],
+            cluster=self._data.get_node(node_id).data or Cluster(),
         )
 
         for child_node in self._data.children(node_id):
@@ -261,7 +278,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
         leaves_limit = config.leaves_limit
 
     tree = Tree()
-    tree.create_node(identifier=Featree.ROOT, data=set())
+    tree.create_node(identifier=Featree.ROOT, data=Cluster(files=[]))
 
     for each_sub_graph in sub_graphs:
         recursive_community_detection(
