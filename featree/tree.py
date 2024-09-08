@@ -52,8 +52,29 @@ def weighted_graph_density(G):
     return total_weight / max_possible_weight
 
 
+def graph_connected_count(parent_g: nx.Graph, g1: nx.Graph, g2: nx.Graph) -> int:
+    count = 0
+    for u in g1.nodes:
+        for v in g2.nodes:
+            if parent_g.has_edge(u, v):
+                count += parent_g.edges[u, v]["weight"]
+    return count
+
+
 class Cluster(BaseModel):
     files: typing.List[str] = []
+
+
+def louvain(g, **kwargs):
+    partition = community_louvain.best_partition(g, **kwargs)
+    keys = sorted(partition.keys())
+    counter = OrderedDict()
+    for k in keys:
+        comm = partition[k]
+        if comm not in counter:
+            counter[comm] = []
+        counter[comm].append(k)
+    return counter
 
 
 def recursive_community_detection(
@@ -65,18 +86,7 @@ def recursive_community_detection(
 ):
     # Initial community detection on the whole graph or subgraph
     part_dict = {each_node: index for index, each_node in enumerate(sorted(g.nodes()))}
-    partition = community_louvain.best_partition(
-        g, partition=part_dict, random_state=42
-    )
-
-    # Step 2: Check each community
-    keys = sorted(partition.keys())
-    counter = OrderedDict()
-    for k in keys:
-        comm = partition[k]
-        if comm not in counter:
-            counter[comm] = []
-        counter[comm].append(k)
+    counter = louvain(g, partition=part_dict, random_state=42)
 
     for comm, community_nodes in counter.items():
         # Step 3: Further split the large community
