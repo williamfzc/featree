@@ -1,11 +1,11 @@
 import typing
-from collections import deque, OrderedDict
+from collections import deque, OrderedDict, Counter
 
 import networkx as nx
+import pandas
 import tqdm
 import treelib
 from community import community_louvain
-from loguru import logger
 from pydantic import BaseModel
 from treelib import Tree, Node
 
@@ -63,6 +63,7 @@ def graph_connected_count(parent_g: nx.Graph, g1: nx.Graph, g2: nx.Graph) -> int
 
 class Cluster(BaseModel):
     files: typing.List[str] = []
+    symbols: Counter[str] = Counter()
 
 
 def louvain(g, **kwargs):
@@ -130,11 +131,17 @@ class FeatreeNode(BaseModel):
 class _TreeBase(object):
     ROOT = "0"
 
-    def __init__(self, data: treelib.Tree, graph: nx.Graph):
+    def __init__(
+        self,
+        data: treelib.Tree,
+        graph: nx.Graph,
+        config: GenTreeConfig,
+    ):
         self._data: treelib.Tree = data
         self._desc_dict = dict()
         self._leave_graph = nx.Graph()
         self._origin_graph = graph
+        self.config = config
 
     def leaves(self) -> typing.List[Node]:
         return [
@@ -168,6 +175,8 @@ class _TreeBase(object):
         leaves = set([each.identifier for each in self.leaves()])
         g.add_nodes_from(leaves)
 
+        symbol_df = pandas.read_csv(self.config.symbol_csv_file, index_col=0)
+
         # 2. link these nodes by branches
         def _walk(n: Node):
             if n.identifier in leaves:
@@ -186,7 +195,24 @@ class _TreeBase(object):
                             continue
 
                         if not g.has_edge(ci1, ci2):
-                            g.add_edge(ci1, ci2)
+                            weight = 1
+                            symbol_counter = Counter()
+                            for u in child1.data.files:
+                                for v in child2.data.files:
+                                    if self._origin_graph.has_edge(u, v):
+                                        weight += 1
+
+                                    if (u in symbol_df.index) and (
+                                        v in symbol_df.columns
+                                    ):
+                                        cell_value = symbol_df.loc[u, v]
+                                        if isinstance(cell_value, str):
+                                            symbols = cell_value.split("|")
+                                            for each in symbols:
+                                                symbol_counter.update({each: 1})
+                            child1.data.symbols = symbol_counter
+                            child2.data.symbols = symbol_counter
+                            g.add_edge(ci1, ci2, weight=weight)
 
             self.walk_bfs(_link, n.identifier)
 
@@ -295,7 +321,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
             each_sub_graph, leaves_limit, config.density_ratio, tree, tree.root
         )
 
-    ret = Featree(tree, graph)
+    ret = Featree(tree, graph, config)
 
     if config.infer:
         llm = get_llm()
@@ -307,5 +333,4 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
 
     # build graph onto these nodes
     ret.build_graph()
-
     return ret

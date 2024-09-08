@@ -9,3 +9,5 @@ class GenTreeConfig(BaseModel):
     density_ratio: float = 0.9
     infer: bool = False
     exclude_regex: str = ""
+    csv_file: str = "featree-temp.csv"
+    symbol_csv_file: str = "featree-symbols-temp.csv"
