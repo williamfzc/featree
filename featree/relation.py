@@ -19,19 +19,18 @@ def gen_graph(
     if os.path.exists(symbol_csv_file):
         os.remove(symbol_csv_file)
 
-    subprocess.check_call(
-        [
-            config.gossiphs_bin,
-            "relation",
-            "--project-path",
-            config.project_path,
-            "--csv",
-            csv_file,
-            "--symbol-csv",
-            symbol_csv_file,
-            "--strict",
-        ]
-    )
+    commands = [
+        config.gossiphs_bin,
+        "relation",
+        "--project-path",
+        config.project_path,
+        "--csv",
+        csv_file,
+        "--strict",
+    ]
+    if config.include_symbols:
+        commands.extend(["--symbol-csv", symbol_csv_file])
+    subprocess.check_call(commands)
 
     df = pandas.read_csv(csv_file, index_col=0)
 

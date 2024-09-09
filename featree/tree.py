@@ -175,7 +175,10 @@ class _TreeBase(object):
         leaves = set([each.identifier for each in self.leaves()])
         g.add_nodes_from(leaves)
 
-        symbol_df = pandas.read_csv(self.config.symbol_csv_file, index_col=0, dtype=str)
+        if self.config.include_symbols:
+            symbol_df = pandas.read_csv(self.config.symbol_csv_file, index_col=0, dtype=str)
+        else:
+            symbol_df = None
 
         # 2. link these nodes by branches
         def _walk(n: Node):
@@ -202,14 +205,13 @@ class _TreeBase(object):
                                     if self._origin_graph.has_edge(u, v):
                                         weight += 1
 
-                                    if (u in symbol_df.index) and (
-                                        v in symbol_df.columns
-                                    ):
-                                        cell_value = symbol_df.loc[u, v]
+                                    if symbol_df is not None:
+                                        cell_value = symbol_df.at[u, v]
                                         if isinstance(cell_value, str):
                                             symbols = cell_value.split("|")
                                             for each in symbols:
-                                                symbol_counter.update({each: 1})
+                                                symbol_counter[each] += 1
+
                             child1.data.symbols = symbol_counter
                             child2.data.symbols = symbol_counter
                             g.add_edge(ci1, ci2, weight=weight)

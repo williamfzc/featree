@@ -11,3 +11,4 @@ class GenTreeConfig(BaseModel):
     exclude_regex: str = ""
     csv_file: str = "featree-temp.csv"
     symbol_csv_file: str = "featree-symbols-temp.csv"
+    include_symbols: bool = False
