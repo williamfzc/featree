@@ -175,7 +175,7 @@ class _TreeBase(object):
         leaves = set([each.identifier for each in self.leaves()])
         g.add_nodes_from(leaves)
 
-        symbol_df = pandas.read_csv(self.config.symbol_csv_file, index_col=0)
+        symbol_df = pandas.read_csv(self.config.symbol_csv_file, index_col=0, dtype=str)
 
         # 2. link these nodes by branches
         def _walk(n: Node):
