@@ -2,7 +2,7 @@ import typing
 from collections import deque, OrderedDict, Counter
 
 import networkx as nx
-import pandas
+import pandas as pd
 import tqdm
 import treelib
 from community import community_louvain
@@ -177,9 +177,9 @@ class _TreeBase(object):
         g.add_nodes_from(leaves)
 
         if self.config.include_symbols:
-            symbol_df = pandas.read_csv(
-                self.config.symbol_csv_file, index_col=0, dtype=str
-            )
+            symbol_df = pd.DataFrame()
+            for chunk in pd.read_csv(self.config.symbol_csv_file, index_col=0, dtype=str, chunksize=1024):
+                symbol_df = pd.concat([symbol_df, chunk])
         else:
             symbol_df = None
 
