@@ -6,6 +6,7 @@ import pandas
 import tqdm
 import treelib
 from community import community_louvain
+from loguru import logger
 from pydantic import BaseModel
 from treelib import Tree, Node
 
@@ -176,7 +177,9 @@ class _TreeBase(object):
         g.add_nodes_from(leaves)
 
         if self.config.include_symbols:
-            symbol_df = pandas.read_csv(self.config.symbol_csv_file, index_col=0, dtype=str)
+            symbol_df = pandas.read_csv(
+                self.config.symbol_csv_file, index_col=0, dtype=str
+            )
         else:
             symbol_df = None
 
@@ -309,6 +312,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
     sub_graphs = [
         graph.subgraph(component).copy() for component in nx.connected_components(graph)
     ]
+    logger.info("relation graph ready")
 
     # Set the threshold for community size
     leaves_limit = int(config.leaves_limit_ratio * len(graph.nodes))
@@ -324,6 +328,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
         )
 
     ret = Featree(tree, graph, config)
+    logger.info("tree ready")
 
     if config.infer:
         llm = get_llm()
@@ -335,4 +340,5 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
 
     # build graph onto these nodes
     ret.build_graph()
+    logger.info("build graph ready")
     return ret
