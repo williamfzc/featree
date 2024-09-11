@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import re
 import subprocess
@@ -8,6 +9,11 @@ from pandas import DataFrame
 from loguru import logger
 
 from featree.config import GenTreeConfig
+
+
+# avoid OOM killed
+def _run(c):
+    subprocess.check_call(c)
 
 
 def gen_graph(
@@ -34,7 +40,12 @@ def gen_graph(
     if config.exclude_regex:
         commands.extend(["--exclude-file-regex", config.exclude_regex])
     logger.info(f"gossiphs cmd: {commands}")
-    subprocess.check_call(commands)
+
+    process = multiprocessing.Process(target=_run, args=(commands,))
+    process.start()
+    process.join()
+    if process.exitcode != 0:
+        raise RuntimeError(f"Child process failed with exit code {process.exitcode}")
 
     df = pandas.read_csv(csv_file, index_col=0)
 
