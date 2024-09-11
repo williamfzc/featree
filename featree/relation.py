@@ -5,6 +5,7 @@ import subprocess
 import networkx as nx
 import pandas
 from pandas import DataFrame
+from loguru import logger
 
 from featree.config import GenTreeConfig
 
@@ -30,6 +31,9 @@ def gen_graph(
     ]
     if config.include_symbols:
         commands.extend(["--symbol-csv", symbol_csv_file])
+    if config.exclude_regex:
+        commands.extend(["--exclude-file-regex", config.exclude_regex])
+    logger.info(f"gossiphs cmd: {commands}")
     subprocess.check_call(commands)
 
     df = pandas.read_csv(csv_file, index_col=0)
