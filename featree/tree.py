@@ -1,3 +1,4 @@
+import csv
 import typing
 from collections import deque, OrderedDict, Counter
 
@@ -60,6 +61,42 @@ def graph_connected_count(parent_g: nx.Graph, g1: nx.Graph, g2: nx.Graph) -> int
             if parent_g.has_edge(u, v):
                 count += parent_g.edges[u, v]["weight"]
     return count
+
+
+class SymbolTable(object):
+    def __init__(self):
+        self.files = []
+        self.file_index_dict = dict()
+
+    def at(self, src: str, dst: str) -> typing.List[str]:
+        src_index = self.files.index(src)
+        dst_index = self.files.index(dst)
+        key = (src_index, dst_index)
+        if key not in self.file_index_dict:
+            return []
+        return self.file_index_dict[key]
+
+
+def load_symbol_table(f: str) -> SymbolTable:
+    with open(f, "r") as file:
+        files = pd.read_csv(file, nrows=0).columns.tolist()[1:]
+
+    ret = SymbolTable()
+    ret.files = files
+
+    with open(f, mode="r", newline="", encoding="utf-8") as file:
+        reader = csv.reader(file)
+
+        next(reader)
+        index_dict = dict()
+        for src_file_index, row in enumerate(reader):
+            valid_data = row[1:]
+            for dst_file_index, val in enumerate(valid_data):
+                if not val:
+                    continue
+                index_dict[(src_file_index, dst_file_index)] = val.split("|")
+    ret.file_index_dict = index_dict
+    return ret
 
 
 class Cluster(BaseModel):
@@ -177,11 +214,9 @@ class _TreeBase(object):
         g.add_nodes_from(leaves)
 
         if self.config.include_symbols:
-            symbol_df = pd.DataFrame()
-            for chunk in pd.read_csv(self.config.symbol_csv_file, index_col=0, dtype=str, chunksize=1024):
-                symbol_df = pd.concat([symbol_df, chunk])
+            symbol_table = load_symbol_table(self.config.symbol_csv_file)
         else:
-            symbol_df = None
+            symbol_table = None
 
         # 2. link these nodes by branches
         def _walk(n: Node):
@@ -208,12 +243,10 @@ class _TreeBase(object):
                                     if self._origin_graph.has_edge(u, v):
                                         weight += 1
 
-                                    if symbol_df is not None:
-                                        cell_value = symbol_df.at[u, v]
-                                        if isinstance(cell_value, str):
-                                            symbols = cell_value.split("|")
-                                            for each in symbols:
-                                                symbol_counter[each] += 1
+                                    if symbol_table is not None:
+                                        symbols = symbol_table.at(u, v)
+                                        for each in symbols:
+                                            symbol_counter[each] += 1
 
                             child1.data.symbols = symbol_counter
                             child2.data.symbols = symbol_counter
