@@ -247,9 +247,7 @@ class _TreeBase(object):
                                         symbols = symbol_table.at(u, v)
                                         for each in symbols:
                                             symbol_counter[each] += 1
-
-                            child1.data.symbols = symbol_counter
-                            child2.data.symbols = symbol_counter
+                            child1.data.symbols.update(symbol_counter)
                             g.add_edge(ci1, ci2, weight=weight)
 
             self.walk_bfs(_link, n.identifier)
