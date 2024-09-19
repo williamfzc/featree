@@ -69,9 +69,7 @@ class SymbolTable(object):
         self.file_index_dict = dict()
 
     def at(self, src: str, dst: str) -> typing.List[str]:
-        src_index = self.files.index(src)
-        dst_index = self.files.index(dst)
-        key = (src_index, dst_index)
+        key = (src, dst)
         if key not in self.file_index_dict:
             return []
         return self.file_index_dict[key]
@@ -94,7 +92,9 @@ def load_symbol_table(f: str) -> SymbolTable:
             for dst_file_index, val in enumerate(valid_data):
                 if not val:
                     continue
-                index_dict[(src_file_index, dst_file_index)] = val.split("|")
+                index_dict[(files[src_file_index], files[dst_file_index])] = val.split(
+                    "|"
+                )
     ret.file_index_dict = index_dict
     return ret
 
@@ -213,11 +213,6 @@ class _TreeBase(object):
         leaves = set([each.identifier for each in self.leaves()])
         g.add_nodes_from(leaves)
 
-        if self.config.include_symbols:
-            symbol_table = load_symbol_table(self.config.symbol_csv_file)
-        else:
-            symbol_table = None
-
         # 2. link these nodes by branches
         def _walk(n: Node):
             if n.identifier in leaves:
@@ -237,22 +232,31 @@ class _TreeBase(object):
 
                         if not g.has_edge(ci1, ci2):
                             weight = 1
-                            symbol_counter = Counter()
                             for u in child1.data.files:
                                 for v in child2.data.files:
                                     if self._origin_graph.has_edge(u, v):
                                         weight += 1
-
-                                    if symbol_table is not None:
-                                        symbols = symbol_table.at(u, v)
-                                        for each in symbols:
-                                            symbol_counter[each] += 1
-                            child1.data.symbols.update(symbol_counter)
                             g.add_edge(ci1, ci2, weight=weight)
 
             self.walk_bfs(_link, n.identifier)
 
         self.walk_postorder(_walk, self.ROOT)
+
+    def load_symbols_to_graph(self):
+        if not self.config.include_symbols:
+            return
+
+        symbol_table = load_symbol_table(self.config.symbol_csv_file)
+        leaves = self.leaves()
+        for src_leaf in leaves:
+            each_counter = Counter()
+            for dst_leaf in leaves:
+                for each_src_file in src_leaf.data.files:
+                    for each_dst_file in dst_leaf.data.files:
+                        symbols = symbol_table.at(each_src_file, each_dst_file)
+                        for each in symbols:
+                            each_counter[each] += 1
+            src_leaf.data.symbols.update(each_counter)
 
     def neighbors(self, node: Node, dis_limit: float = None) -> typing.List[Node]:
         neighbors = self._leave_graph.neighbors(node.identifier)
@@ -372,4 +376,6 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
     # build graph onto these nodes
     ret.build_graph()
     logger.info("build graph ready")
+    ret.load_symbols_to_graph()
+
     return ret
