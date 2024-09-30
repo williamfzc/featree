@@ -1,7 +1,9 @@
 import csv
+import os
 import typing
 from collections import deque, OrderedDict, Counter
 
+import networkx
 import networkx as nx
 import pandas as pd
 import tqdm
@@ -102,6 +104,7 @@ def load_symbol_table(f: str) -> SymbolTable:
 class Cluster(BaseModel):
     files: typing.List[str] = []
     symbols: Counter[str] = Counter()
+    leader_file: str = ""
 
 
 def louvain(g, **kwargs):
@@ -240,7 +243,40 @@ class _TreeBase(object):
 
             self.walk_bfs(_link, n.identifier)
 
-        self.walk_postorder(_walk, self.ROOT)
+        # TODO
+        # self.walk_postorder(_walk, self.ROOT)
+
+    def calc_leader_files(self):
+        leaders = []
+        ranks = networkx.pagerank(self._origin_graph)
+        for each_cluster_id in self._leave_graph.nodes():
+            each_cluster = self._data.get_node(each_cluster_id)
+            each_files = each_cluster.data.files
+            max_file = None
+            max_score = float('-inf')
+
+            for each_file in each_files:
+                score = ranks[each_file]
+                if score > max_score:
+                    max_score = score
+                    max_file = each_file
+
+            each_cluster.data.leader_file = max_file
+            leaders.append((each_cluster_id, max_file, max_score))
+
+        for each_cluster_id, each_file, each_rank in sorted(leaders):
+            each_neighbor_files = list(self._origin_graph.neighbors(each_file))
+
+            for each_target_cluster_id in self._leave_graph.nodes():
+                each_cluster = self._data.get_node(each_target_cluster_id)
+                for each_neighbor_file in each_neighbor_files:
+                    if each_neighbor_file not in each_cluster.data.files:
+                        continue
+                    if each_cluster_id == each_target_cluster_id:
+                        continue
+
+                    # weight?
+                    self._leave_graph.add_edge(each_cluster_id, each_target_cluster_id)
 
     def load_symbols_to_graph(self):
         if not self.config.include_symbols:
@@ -264,8 +300,14 @@ class _TreeBase(object):
         nodes = [self._data.get_node(each) for each in neighbors]
         ret = []
 
+        src_leader_file_dir = os.path.dirname(node.data.leader_file)
+
         start_graph = self._origin_graph.subgraph(node.data.files)
         for each_node in nodes:
+            # check leader file
+            if src_leader_file_dir == os.path.dirname(each_node.data.leader_file):
+                continue
+
             if not dis_limit:
                 ret.append(each_node)
                 continue
@@ -376,6 +418,8 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
     # build graph onto these nodes
     ret.build_graph()
     logger.info("build graph ready")
+
+    ret.calc_leader_files()
     ret.load_symbols_to_graph()
 
     return ret
