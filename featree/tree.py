@@ -253,7 +253,7 @@ class _TreeBase(object):
             each_cluster = self._data.get_node(each_cluster_id)
             each_files = each_cluster.data.files
             max_file = None
-            max_score = float('-inf')
+            max_score = float("-inf")
 
             for each_file in each_files:
                 score = ranks[each_file]
@@ -264,6 +264,7 @@ class _TreeBase(object):
             each_cluster.data.leader_file = max_file
             leaders.append((each_cluster_id, max_file, max_score))
 
+        edge_count = {}
         for each_cluster_id, each_file, each_rank in sorted(leaders):
             each_neighbor_files = list(self._origin_graph.neighbors(each_file))
 
@@ -275,8 +276,32 @@ class _TreeBase(object):
                     if each_cluster_id == each_target_cluster_id:
                         continue
 
-                    # weight?
-                    self._leave_graph.add_edge(each_cluster_id, each_target_cluster_id)
+                    if each_cluster.data.symbols and len(each_cluster.data.symbols) > 0:
+                        most_common_symbol = each_cluster.data.symbols.most_common(1)[
+                            0
+                        ][1]
+                    else:
+                        most_common_symbol = 0
+
+                    edge = (each_cluster_id, each_target_cluster_id)
+                    if edge in edge_count:
+                        edge_count[edge] += most_common_symbol
+                    else:
+                        edge_count[edge] = most_common_symbol
+
+        edge_by_cluster = {}
+        for edge, count in edge_count.items():
+            each_cluster_id, each_target_cluster_id = edge
+            if each_cluster_id not in edge_by_cluster:
+                edge_by_cluster[each_cluster_id] = Counter()
+            edge_by_cluster[each_cluster_id][each_target_cluster_id] += count
+
+        for each_cluster_id, target_clusters in edge_by_cluster.items():
+            most_common_edges = target_clusters.most_common(10)
+            for each_target_cluster_id, count in most_common_edges:
+                self._leave_graph.add_edge(
+                    each_cluster_id, each_target_cluster_id, weight=count
+                )
 
     def load_symbols_to_graph(self):
         if not self.config.include_symbols:
@@ -419,7 +444,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
     ret.build_graph()
     logger.info("build graph ready")
 
-    ret.calc_leader_files()
     ret.load_symbols_to_graph()
+    ret.calc_leader_files()
 
     return ret
