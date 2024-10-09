@@ -18,7 +18,7 @@ def _run(c):
 
 def gen_graph(
     config: GenTreeConfig,
-) -> (nx.Graph, DataFrame):
+) -> (nx.DiGraph, nx.Graph):
     csv_file = config.csv_file
     symbol_csv_file = config.symbol_csv_file
     if os.path.exists(csv_file):
@@ -54,19 +54,20 @@ def gen_graph(
     if config.exclude_regex:
         exclude_regex = re.compile(config.exclude_regex)
 
-    g = nx.Graph()
+    dig = nx.DiGraph()
     for column in df.columns:
         if exclude_regex and exclude_regex.search(column):
             continue
-        g.add_node(column)
+        dig.add_node(column)
 
     for row_number, (i, row) in enumerate(df.iterrows()):
         for j, value in enumerate(row):
             if value > 0:
                 cur_file = df.columns[j]
-                if g.has_node(i) and g.has_node(cur_file):
-                    g.add_edge(i, cur_file, weight=value)
+                if dig.has_node(i) and dig.has_node(cur_file):
+                    dig.add_edge(i, cur_file, weight=value)
 
-    isolated_nodes = [node for node in g.nodes() if g.degree(node) == 0]
-    g.remove_nodes_from(isolated_nodes)
-    return g
+    isolated_nodes = [node for node in dig.nodes() if dig.degree(node) == 0]
+    dig.remove_nodes_from(isolated_nodes)
+    g = dig.to_undirected()
+    return dig, g

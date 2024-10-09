@@ -5,6 +5,7 @@ from collections import deque, OrderedDict, Counter
 
 import networkx
 import networkx as nx
+import numpy as np
 import pandas as pd
 import tqdm
 import treelib
@@ -105,6 +106,7 @@ class Cluster(BaseModel):
     files: typing.List[str] = []
     symbols: Counter[str] = Counter()
     leader_file: str = ""
+    hub_score: float = 0.0
 
 
 def louvain(g, **kwargs):
@@ -175,12 +177,14 @@ class _TreeBase(object):
     def __init__(
         self,
         data: treelib.Tree,
+        digraph: nx.DiGraph,
         graph: nx.Graph,
         config: GenTreeConfig,
     ):
         self._data: treelib.Tree = data
         self._desc_dict = dict()
-        self._leave_graph = nx.Graph()
+        self._leave_di_graph = nx.DiGraph()
+        self._origin_di_graph = digraph
         self._origin_graph = graph
         self.config = config
 
@@ -211,8 +215,8 @@ class _TreeBase(object):
 
     def build_graph(self):
         # 1. add nodes to graph
-        g = nx.Graph()
-        self._leave_graph = g
+        g = nx.DiGraph()
+        self._leave_di_graph = g
         leaves = set([each.identifier for each in self.leaves()])
         g.add_nodes_from(leaves)
 
@@ -248,8 +252,8 @@ class _TreeBase(object):
 
     def calc_leader_files(self):
         leaders = []
-        ranks = networkx.pagerank(self._origin_graph)
-        for each_cluster_id in self._leave_graph.nodes():
+        ranks = networkx.pagerank(self._origin_di_graph)
+        for each_cluster_id in self._leave_di_graph.nodes():
             each_cluster = self._data.get_node(each_cluster_id)
             each_files = each_cluster.data.files
             max_file = None
@@ -266,9 +270,9 @@ class _TreeBase(object):
 
         edge_count = {}
         for each_cluster_id, each_file, each_rank in sorted(leaders):
-            each_neighbor_files = list(self._origin_graph.neighbors(each_file))
+            each_neighbor_files = list(self._origin_di_graph.neighbors(each_file))
 
-            for each_target_cluster_id in self._leave_graph.nodes():
+            for each_target_cluster_id in self._leave_di_graph.nodes():
                 each_cluster = self._data.get_node(each_target_cluster_id)
                 for each_neighbor_file in each_neighbor_files:
                     if each_neighbor_file not in each_cluster.data.files:
@@ -299,9 +303,24 @@ class _TreeBase(object):
         for each_cluster_id, target_clusters in edge_by_cluster.items():
             most_common_edges = target_clusters.most_common(10)
             for each_target_cluster_id, count in most_common_edges:
-                self._leave_graph.add_edge(
+                self._leave_di_graph.add_edge(
                     each_cluster_id, each_target_cluster_id, weight=count
                 )
+
+        # Authority ~= Function
+        # Hub ~= Danger files
+        hubs, authorities = nx.hits(self._leave_di_graph)
+        hub_scores = np.array(list(hubs.values()))
+        median_score = np.median(hub_scores)
+
+        top_hubs = sorted(hubs.items(), key=lambda x: x[1], reverse=True)
+
+        for node, hub_score in top_hubs:
+            node_data = self._data.get_node(node).data
+            node_data.hub_score = hub_score
+
+            if hub_score < median_score:
+                self._leave_di_graph.remove_edges_from(list(self._leave_di_graph.edges(node)))
 
     def load_symbols_to_graph(self):
         if not self.config.include_symbols:
@@ -320,7 +339,7 @@ class _TreeBase(object):
             src_leaf.data.symbols.update(each_counter)
 
     def neighbors(self, node: Node, dis_limit: float = None) -> typing.List[Node]:
-        neighbors = self._leave_graph.neighbors(node.identifier)
+        neighbors = self._leave_di_graph.neighbors(node.identifier)
         # check these neighbors
         nodes = [self._data.get_node(each) for each in neighbors]
         ret = []
@@ -410,7 +429,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
     if not config:
         config = GenTreeConfig()
 
-    graph = gen_graph(config)
+    digraph, graph = gen_graph(config)
     sub_graphs = [
         graph.subgraph(component).copy() for component in nx.connected_components(graph)
     ]
@@ -429,7 +448,7 @@ def gen_tree(config: GenTreeConfig = None) -> Featree:
             each_sub_graph, leaves_limit, config.density_ratio, tree, tree.root
         )
 
-    ret = Featree(tree, graph, config)
+    ret = Featree(tree, digraph, graph, config)
     logger.info("tree ready")
 
     if config.infer:
